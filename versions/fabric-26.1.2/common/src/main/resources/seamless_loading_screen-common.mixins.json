@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.minenash.seamless_loading_screen.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "ConnectScreenMixin",
+    "CreateWorldScreenMixin",
+    "GameOptionsMixin",
+    "GameRendererMixin",
+    "LevelLoadingScreenMixin",
+    "MinecraftClientMixin",
+    "QuickPlayMixin",
+    "WorldListWidgetMixin",
+    "custom_screenshots.ManageServerScreenMixin",
+    "custom_screenshots.ServerDataMixin",
+    "realm.RealmsMainScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "plugin": "com.minenash.seamless_loading_screen.mixin.mod_compat.ModCompatMixinPlugin"
+}

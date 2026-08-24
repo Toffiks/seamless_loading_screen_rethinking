@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "seamless_loading_screen",
+  "version": "${version}",
+  "name": "Seamless Loading Screen Rethinking",
+  "description": "An unofficial fork of Seamless Loading Screen with updated loading transitions and background screenshot saving.",
+  "authors": [
+    "Minenash",
+    "Toffiks"
+  ],
+  "license": "MIT",
+  "icon": "assets/seamless_loading_screen/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.minenash.seamless_loading_screen.fabric.SeamlessLoadingScreenFabric"
+    ],
+    "modmenu": [
+      "com.minenash.seamless_loading_screen.fabric.config.ModMenuEntryPoint"
+    ]
+  },
+  "mixins": [
+    "seamless_loading_screen-common.mixins.json",
+    "seamless_loading_screen-fabric.mixins.json"
+  ],
+  "custom": {
+    "sodium:options": {
+      "mixin.features.gui.screen": false
+    }
+  },
+  "depends": {
+    "fabricloader": "*",
+    "fabric-api": "*",
+    "java": ">=25",
+    "minecraft": "26.1.2",
+    "yet_another_config_lib_v3": "*"
+  },
+  "conflicts": {
+    "wynntils": "*"
+  }
+}

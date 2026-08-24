@@ -1,0 +1,54 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+sourceSets {
+    main {
+        java.srcDirs = ['common/src/main/java', 'fabric/src/main/java']
+        resources.srcDirs = ['common/src/main/resources', 'fabric/src/main/resources']
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.isxander.dev/releases' }
+    maven { url = 'https://maven.terraformersmc.com/releases/' }
+    maven { url = 'https://api.modrinth.com/maven' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+    compileOnly files("libs/fabric-api-0.155.2+26.2.jar")
+    compileOnly fileTree(dir: 'libs', include: ['fabric-api-base-*.jar', 'fabric-key-mapping-api-v1-*.jar', 'fabric-lifecycle-events-v1-*.jar'])
+    compileOnly files("libs/yacl-3.9.6+26.2-fabric.jar")
+    compileOnly files("libs/modmenu-${project.modmenu_version}.jar")
+}
+
+processResources {
+    inputs.property 'version', project.version
+    from('LICENSE')
+    exclude 'architectury.common.json'
+    exclude 'seamless_loading_screen.accesswidener'
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 25
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
