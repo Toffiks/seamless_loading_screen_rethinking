@@ -15,7 +15,7 @@ public abstract class GameRendererMixin {
             target = "Lnet/minecraft/client/renderer/GameRenderer;renderLevel(Lnet/minecraft/client/DeltaTracker;)V",
             shift = At.Shift.AFTER))
     private void attemptToTakeScreenshot(DeltaTracker tickCounter, boolean tick, CallbackInfo ci) {
-        if (OnLeaveHelper.attemptScreenShot) OnLeaveHelper.takeScreenShot();
+        if (OnLeaveHelper.shouldTakeScreenshot()) OnLeaveHelper.takeScreenShot();
     }
 
 }

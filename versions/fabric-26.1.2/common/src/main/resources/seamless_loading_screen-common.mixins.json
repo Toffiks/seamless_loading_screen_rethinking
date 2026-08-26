@@ -8,8 +8,10 @@
     "CreateWorldScreenMixin",
     "GameOptionsMixin",
     "GameRendererMixin",
+    "GuiMixin",
     "LevelLoadingScreenMixin",
     "MinecraftClientMixin",
+    "PauseScreenMixin",
     "QuickPlayMixin",
     "WorldListWidgetMixin",
     "custom_screenshots.ManageServerScreenMixin",
@@ -18,6 +20,5 @@
   ],
   "injectors": {
     "defaultRequire": 1
-  },
-  "plugin": "com.minenash.seamless_loading_screen.mixin.mod_compat.ModCompatMixinPlugin"
+  }
 }

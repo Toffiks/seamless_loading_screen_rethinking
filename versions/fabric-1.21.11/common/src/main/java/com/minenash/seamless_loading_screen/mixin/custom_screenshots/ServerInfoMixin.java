@@ -13,27 +13,34 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.Locale;
+
 @Mixin(ServerInfo.class)
 public abstract class ServerInfoMixin implements ServerInfoExtension {
+    @Unique private static final String DISPLAY_MODE_KEY = "seamless_loading_screen:screenshot_display_mode";
+    @Unique private static final String LEGACY_DISPLAY_MODE_KEY = "screenshotDisplayMode";
 
     @Shadow
     public String address;
     @Unique
-    private DisplayMode seamless_loading_screen$displayMode = DisplayMode.ENABLED;
+    private DisplayMode seamless_loading_screen$displayMode = SeamlessLoadingScreenConfig.get().defaultServerMode;
 
     @Inject(method = "fromNbt", at = @At("RETURN"))
     private static void deserialize(NbtCompound tag, CallbackInfoReturnable<ServerInfo> callback) {
-//        System.out.println("READ: ");
-        if (!tag.contains("screenshotDisplayMode")) return;
+        String key = tag.contains(DISPLAY_MODE_KEY) ? DISPLAY_MODE_KEY : LEGACY_DISPLAY_MODE_KEY;
+        if (!tag.contains(key)) return;
 
-        tag.getString("screenshotDisplayMode").ifPresent(value ->
-                ((ServerInfoMixin) (Object) callback.getReturnValue()).seamless_loading_screen$displayMode = Enum.valueOf(DisplayMode.class, value));
+        tag.getString(key).ifPresent(value -> {
+            try {
+                ((ServerInfoExtension) callback.getReturnValue()).setDisplayMode(DisplayMode.valueOf(value));
+            } catch (IllegalArgumentException ignored) {
+            }
+        });
     }
 
     @Inject(method = "toNbt", at = @At("RETURN"))
     private void serialize(CallbackInfoReturnable<NbtCompound> callback) {
-//        System.out.println("SET: " + displayMode.toString());
-        callback.getReturnValue().putString("screenshotDisplayMode", seamless_loading_screen$displayMode.toString());
+        callback.getReturnValue().putString(DISPLAY_MODE_KEY, seamless_loading_screen$displayMode.name());
     }
 
     @Inject(method = "copyFrom", at = @At("TAIL"))
@@ -43,9 +50,10 @@ public abstract class ServerInfoMixin implements ServerInfoExtension {
 
     @Override
     public DisplayMode getDisplayMode() {
-        for (String blacklistedAddress : SeamlessLoadingScreenConfig.get().blacklistedAddresses) {
-            if (this.address.contains(blacklistedAddress)) {
-                return DisplayMode.DISABLED;
+        var blacklistedAddresses = SeamlessLoadingScreenConfig.get().blacklistedAddresses;
+        if (blacklistedAddresses != null) {
+            for (String blacklistedAddress : blacklistedAddresses) {
+                if (seamless_loading_screen$isBlockedAddress(this.address, blacklistedAddress)) return DisplayMode.DISABLED;
             }
         }
 
@@ -54,6 +62,34 @@ public abstract class ServerInfoMixin implements ServerInfoExtension {
 
     @Override
     public void setDisplayMode(DisplayMode mode) {
-        seamless_loading_screen$displayMode = mode;
+        seamless_loading_screen$displayMode = mode == null ? DisplayMode.DISABLED : mode;
+    }
+
+    @Unique
+    private static boolean seamless_loading_screen$isBlockedAddress(String address, String blockedAddress) {
+        String host = seamless_loading_screen$normalizeHost(address);
+        String blockedHost = seamless_loading_screen$normalizeHost(blockedAddress);
+        return !host.isEmpty() && !blockedHost.isEmpty()
+                && (host.equals(blockedHost) || host.endsWith("." + blockedHost));
+    }
+
+    @Unique
+    private static String seamless_loading_screen$normalizeHost(String address) {
+        if (address == null || address.isBlank()) return "";
+        String value = address.strip().toLowerCase(Locale.ROOT);
+
+        if (value.startsWith("[")) {
+            int closingBracket = value.indexOf(']');
+            if (closingBracket > 1) return value.substring(1, closingBracket);
+        }
+
+        int firstColon = value.indexOf(':');
+        int lastColon = value.lastIndexOf(':');
+        if (firstColon > 0 && firstColon == lastColon
+                && value.substring(firstColon + 1).chars().allMatch(Character::isDigit)) {
+            value = value.substring(0, firstColon);
+        }
+        while (value.endsWith(".")) value = value.substring(0, value.length() - 1);
+        return value;
     }
 }

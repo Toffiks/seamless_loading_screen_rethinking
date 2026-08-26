@@ -1,13 +1,12 @@
 package com.minenash.seamless_loading_screen.mixin;
 
 import com.minenash.seamless_loading_screen.OnLeaveHelper;
-import com.minenash.seamless_loading_screen.PlatformFunctions;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
-import net.minecraft.network.chat.Component;
 import com.minenash.seamless_loading_screen.ScreenshotLoader;
-import com.minenash.seamless_loading_screen.WorldFadeScreen;
+import com.minenash.seamless_loading_screen.WorldFadeTransition;
 import com.minenash.seamless_loading_screen.config.SeamlessLoadingScreenConfig;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
@@ -27,55 +26,48 @@ public abstract class MinecraftClientMixin {
 
     @Unique
     private boolean seamless_loading_screen$firstOccurrence = true;
-    @Unique
-    private boolean seamless_loading_screen$bypassDisconnectCapture = false;
     @Shadow
     public abstract void stop();
-    @Shadow
-    public abstract void disconnectFromWorld(Component message);
 
     @ModifyVariable(method = "setScreen", at = @At("HEAD"), argsOnly = true, index = 1)
     private Screen seamless_loading_screen$addWorldTransition(Screen nextScreen) {
+        if (nextScreen instanceof DisconnectedScreen && ScreenshotLoader.isLoadingScreenPending()) {
+            WorldFadeTransition.finish();
+            return nextScreen;
+        }
+
+        if (WorldFadeTransition.isActive() && nextScreen != null) {
+            WorldFadeTransition.finish();
+            return nextScreen;
+        }
+
         if (!(screen instanceof LevelLoadingScreen) || !ScreenshotLoader.isTransitionActive()) {
             return nextScreen;
         }
 
         if (nextScreen != null) {
-            ScreenshotLoader.finishLoadingScreen();
+            WorldFadeTransition.finish();
             return nextScreen;
         }
 
-        return new WorldFadeScreen(Math.max(1, SeamlessLoadingScreenConfig.get().fade));
+        WorldFadeTransition.start(Math.max(1, SeamlessLoadingScreenConfig.get().fade));
+        return null;
     }
-
-    @Inject(method = "disconnectFromWorld", at = @At("HEAD"), cancellable = true)
-    private void seamless_loading_screen$captureBeforeDisconnect(Component message, CallbackInfo info) {
-        if (!PlatformFunctions.hasFastQuit()) return;
-        if (seamless_loading_screen$bypassDisconnectCapture || instance.player == null) {
-            seamless_loading_screen$bypassDisconnectCapture = false;
-            return;
-        }
-
-        OnLeaveHelper.beginScreenshotTask(() -> {
-            seamless_loading_screen$bypassDisconnectCapture = true;
-            this.disconnectFromWorld(message);
-        });
-        info.cancel();
-    }
-
-    //----
 
     @Inject(method = "stop", at = @At("HEAD"), cancellable = true)
     private void onWindowClose(CallbackInfo info) {
-        if (!PlatformFunctions.hasFastQuit()) return;
-        if (!seamless_loading_screen$firstOccurrence || instance.player == null) return;
+        if (!seamless_loading_screen$firstOccurrence) return;
 
-        OnLeaveHelper.beginScreenshotTask(() -> {
+        Runnable stopClient = () -> {
             this.seamless_loading_screen$firstOccurrence = false;
-
             this.stop();
-        }, true);
+        };
 
-        info.cancel();
+        if (instance.player != null) {
+            OnLeaveHelper.beginScreenshotTask(stopClient, true);
+            info.cancel();
+        } else if (OnLeaveHelper.awaitPendingSaves(stopClient)) {
+            info.cancel();
+        }
     }
 }

@@ -18,7 +18,7 @@ public abstract class WorldListWidgetMixin {
     LevelSummary level;
 
     @Inject(method = "play", at = @At("HEAD"))
-    public void setFilename(CallbackInfo info) {
+    private void seamless_loading_screen$setFilename(CallbackInfo info) {
         ScreenshotLoader.setScreenshot(level.getName());
     }
 

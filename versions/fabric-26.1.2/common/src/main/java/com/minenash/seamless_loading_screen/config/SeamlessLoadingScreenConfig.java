@@ -2,20 +2,33 @@ package com.minenash.seamless_loading_screen.config;
 
 import com.minenash.seamless_loading_screen.DisplayMode;
 import com.minenash.seamless_loading_screen.PlatformFunctions;
-import dev.isxander.yacl3.api.*;
-import dev.isxander.yacl3.api.controller.*;
-import dev.isxander.yacl3.config.ConfigEntry;
+import dev.isxander.yacl3.api.ConfigCategory;
+import dev.isxander.yacl3.api.ListOption;
+import dev.isxander.yacl3.api.Option;
+import dev.isxander.yacl3.api.OptionDescription;
+import dev.isxander.yacl3.api.OptionEventListener;
+import dev.isxander.yacl3.api.OptionGroup;
+import dev.isxander.yacl3.api.YetAnotherConfigLib;
+import dev.isxander.yacl3.api.controller.BooleanControllerBuilder;
+import dev.isxander.yacl3.api.controller.ColorControllerBuilder;
+import dev.isxander.yacl3.api.controller.EnumControllerBuilder;
+import dev.isxander.yacl3.api.controller.FloatFieldControllerBuilder;
+import dev.isxander.yacl3.api.controller.FloatSliderControllerBuilder;
+import dev.isxander.yacl3.api.controller.IntegerFieldControllerBuilder;
+import dev.isxander.yacl3.api.controller.StringControllerBuilder;
 import dev.isxander.yacl3.config.v2.api.ConfigClassHandler;
 import dev.isxander.yacl3.config.v2.api.SerialEntry;
 import dev.isxander.yacl3.config.v2.api.serializer.GsonConfigSerializerBuilder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
-import java.awt.*;
+import java.awt.Color;
 import java.util.List;
+import java.util.Locale;
 
 public class SeamlessLoadingScreenConfig {
-    private static final SafeColorTypeAdapter colorAdapter = new SafeColorTypeAdapter(() -> getDefaults().tintColor);
+    public static final int MAX_FADE_TICKS = 1200;
+    private static final SafeColorTypeAdapter COLOR_ADAPTER = new SafeColorTypeAdapter(() -> getDefaults().tintColor);
     private static final ConfigClassHandler<SeamlessLoadingScreenConfig> CONFIG_CLASS_HANDLER = ConfigClassHandler
             .createBuilder(SeamlessLoadingScreenConfig.class)
             .id(Identifier.fromNamespaceAndPath("seamless_loading_screen", "config"))
@@ -23,18 +36,14 @@ public class SeamlessLoadingScreenConfig {
                     .appendGsonBuilder(builder -> builder.setPrettyPrinting()
                             .disableHtmlEscaping()
                             .serializeNulls()
-                            .registerTypeHierarchyAdapter(Color.class, colorAdapter))
+                            .registerTypeHierarchyAdapter(Color.class, COLOR_ADAPTER))
                     .setPath(PlatformFunctions.getConfigDirectory().resolve("seamless_loading_screen.json"))
                     .build()
             )
             .build();
 
-    //=====================
     @SerialEntry
     public int fade = 20;
-    @SerialEntry
-    public int time = 80;
-    //=====================
     @SerialEntry
     public Color tintColor = new Color(0x212121);
     @SerialEntry
@@ -42,21 +51,15 @@ public class SeamlessLoadingScreenConfig {
     @SerialEntry
     public boolean enableScreenshotBlur = true;
     @SerialEntry
-    public float screenshotBlurStrength = 1f; //min = 1f, max = 16f
-    @SerialEntry
-    public float screenshotBlurQuality = 5f; //min = 1f, max = 16f
-    @SerialEntry
     public boolean playSoundEffect = false;
     @SerialEntry
     public String soundEffect = "minecraft:ui.toast.out";
     @SerialEntry
-    public float soundPitch = 1f; //min = 0f, max = 10f
+    public float soundPitch = 1f;
     @SerialEntry
-    public float soundVolume = 1f; //min = 0f, max = 10f
+    public float soundVolume = 1f;
     @SerialEntry
-    public ScreenshotResolution resolution = ScreenshotResolution.Normal;
-    @SerialEntry
-    public boolean disableCamera = true;
+    public ScreenshotResolution resolution = ScreenshotResolution.Native;
     @SerialEntry
     public boolean archiveScreenshots = false;
     @SerialEntry
@@ -67,7 +70,6 @@ public class SeamlessLoadingScreenConfig {
     public boolean saveScreenshotsByUsername = false;
     @SerialEntry
     public DisplayMode defaultServerMode = DisplayMode.DISABLED;
-    //=====================
 
     private static SeamlessLoadingScreenConfig getDefaults() {
         return CONFIG_CLASS_HANDLER.defaults();
@@ -77,17 +79,51 @@ public class SeamlessLoadingScreenConfig {
         return CONFIG_CLASS_HANDLER.instance();
     }
 
-    //=====================
-
     public static void load() {
         CONFIG_CLASS_HANDLER.load();
 
-        //Check if color is broken within config to save over such i.e tintColor
-        if (colorAdapter.errored()) CONFIG_CLASS_HANDLER.save();
-    }
+        var config = get();
+        var defaults = getDefaults();
+        boolean repaired = COLOR_ADAPTER.errored();
 
-    public static void save() {
-        CONFIG_CLASS_HANDLER.save();
+        if (config.tintColor == null) {
+            config.tintColor = defaults.tintColor;
+            repaired = true;
+        }
+        if (config.soundEffect == null || config.soundEffect.isBlank()) {
+            config.soundEffect = defaults.soundEffect;
+            repaired = true;
+        }
+        if (config.resolution == null) {
+            config.resolution = defaults.resolution;
+            repaired = true;
+        }
+        if (config.blacklistedAddresses == null) {
+            config.blacklistedAddresses = defaults.blacklistedAddresses;
+            repaired = true;
+        }
+        if (config.defaultServerMode == null) {
+            config.defaultServerMode = defaults.defaultServerMode;
+            repaired = true;
+        }
+        if (config.fade < 1 || config.fade > MAX_FADE_TICKS) {
+            config.fade = defaults.fade;
+            repaired = true;
+        }
+        if (!Float.isFinite(config.tintStrength) || config.tintStrength < 0f || config.tintStrength > 1f) {
+            config.tintStrength = defaults.tintStrength;
+            repaired = true;
+        }
+        if (!Float.isFinite(config.soundPitch) || config.soundPitch < 0f || config.soundPitch > 10f) {
+            config.soundPitch = defaults.soundPitch;
+            repaired = true;
+        }
+        if (!Float.isFinite(config.soundVolume) || config.soundVolume < 0f || config.soundVolume > 10f) {
+            config.soundVolume = defaults.soundVolume;
+            repaired = true;
+        }
+
+        if (repaired) CONFIG_CLASS_HANDLER.save();
     }
 
     private static Component getName(String id) {
@@ -97,10 +133,6 @@ public class SeamlessLoadingScreenConfig {
     private static Component getDesc(String id) {
         return Component.translatable("seamless_loading_screen.config." + id + ".description");
     }
-    private static Identifier getImg(String id) {
-        return Identifier.fromNamespaceAndPath("seamless_loading_screen", "textures/config/" + id + ".webp");
-    }
-
     public static YetAnotherConfigLib getInstance() {
         return YetAnotherConfigLib.create(CONFIG_CLASS_HANDLER,
                 (defaults, config, builder) -> {
@@ -111,16 +143,16 @@ public class SeamlessLoadingScreenConfig {
                                     .text(getDesc("fade"))
                                     .build())
                             .binding(defaults.fade, () -> config.fade, (val) -> config.fade = val)
-                            .controller(opt -> IntegerFieldControllerBuilder.create(opt).min(1))
+                            .controller(opt -> IntegerFieldControllerBuilder.create(opt).min(1).max(MAX_FADE_TICKS))
                             .build();
 
-                    var defaultServerModeOpt = Option.<com.minenash.seamless_loading_screen.DisplayMode>createBuilder()
+                    var defaultServerModeOpt = Option.<DisplayMode>createBuilder()
                             .name(getName("serverDisplayMode"))
                             .description(OptionDescription.createBuilder().text(getDesc("serverDisplayMode")).build())
                             .binding(defaults.defaultServerMode, () -> config.defaultServerMode, (val) -> config.defaultServerMode = val)
                             .controller(opt -> EnumControllerBuilder.create(opt)
                                     .enumClass(DisplayMode.class)
-                                    .valueFormatter(val -> Component.translatable("seamless_loading_screen.config.displayMode." + val.name().toLowerCase()))
+                                    .formatValue(val -> Component.translatable("seamless_loading_screen.config.displayMode." + val.name().toLowerCase(Locale.ROOT)))
                             ).build();
 
                     var soundOpt = Option.<String>createBuilder()
@@ -148,27 +180,24 @@ public class SeamlessLoadingScreenConfig {
                             .name(getName("playSoundEffect"))
                             .description(OptionDescription.createBuilder().text(getDesc("playSoundEffect")).build())
                             .binding(defaults.playSoundEffect, () -> config.playSoundEffect, (val) -> config.playSoundEffect = val)
-                            .listener((opt, val) -> {
-                                soundPitchOpt.setAvailable(val);
-                                soundVolumeOpt.setAvailable(val);
+                            .addListener((opt, event) -> {
+                                if (event != OptionEventListener.Event.STATE_CHANGE) return;
+                                boolean enabled = opt.pendingValue();
+                                soundOpt.setAvailable(enabled);
+                                soundPitchOpt.setAvailable(enabled);
+                                soundVolumeOpt.setAvailable(enabled);
                             })
                             .controller(opt -> BooleanControllerBuilder.create(opt).yesNoFormatter())
                             .build();
 
-                    var screenshotBlurStrengthOpt = Option.<Float>createBuilder()
-                            .name(getName("screenshotBlurStrength"))
-                            .description(OptionDescription.createBuilder().text(getDesc("screenshotBlurStrength")).build())
-                            .binding(defaults.screenshotBlurStrength, () -> config.screenshotBlurStrength, (val) -> config.screenshotBlurStrength = val)
-                            .controller(opt -> FloatSliderControllerBuilder.create(opt).range(1f, 16f).step(0.1f))
-                            .build();
+                    soundOpt.setAvailable(config.playSoundEffect);
+                    soundPitchOpt.setAvailable(config.playSoundEffect);
+                    soundVolumeOpt.setAvailable(config.playSoundEffect);
 
                     var enableScreenshotBlurOpt = Option.<Boolean>createBuilder()
                             .name(getName("enableScreenshotBlur"))
                             .description(OptionDescription.createBuilder().text(getDesc("enableScreenshotBlur")).build())
                             .binding(defaults.enableScreenshotBlur, () -> config.enableScreenshotBlur, (val) -> config.enableScreenshotBlur = val)
-                            .listener((opt, val) -> {
-                                screenshotBlurStrengthOpt.setAvailable(val);
-                            })
                             .controller(opt -> BooleanControllerBuilder.create(opt).yesNoFormatter())
                             .build();
 
@@ -199,7 +228,7 @@ public class SeamlessLoadingScreenConfig {
                             .binding(defaults.resolution, () -> config.resolution, (val) -> config.resolution = val)
                             .controller(opt -> EnumControllerBuilder.create(opt)
                                     .enumClass(ScreenshotResolution.class)
-                                    .valueFormatter(val -> Component.translatable("seamless_loading_screen.config.resolution." + val.name().toLowerCase()))
+                                    .formatValue(val -> Component.translatable("seamless_loading_screen.config.resolution." + val.name().toLowerCase(Locale.ROOT)))
                             ).build();
 
                     var updateWorldIconOpt = Option.<Boolean>createBuilder()
@@ -233,7 +262,7 @@ public class SeamlessLoadingScreenConfig {
                                     .group(OptionGroup.createBuilder().name(getName("soundEffects"))
                                             .options(List.of(playSoundEffectOpt, soundOpt, soundVolumeOpt, soundPitchOpt)).build())
                                     .group(OptionGroup.createBuilder().name(getName("screenshotBlur"))
-                                            .options(List.of(enableScreenshotBlurOpt, screenshotBlurStrengthOpt)).build())
+                                            .option(enableScreenshotBlurOpt).build())
                                     .group(OptionGroup.createBuilder().name(getName("tint"))
                                             .options(List.of(tintColorOpt, tintStrengthOpt)).build())
                                     .build())
@@ -257,13 +286,12 @@ public class SeamlessLoadingScreenConfig {
         r4K(4000, 2160),
         r8K(7900, 4320);
 
-        public int width, height;
+        public final int width;
+        public final int height;
 
-        ScreenshotResolution(int width_in, int height_in) {
-            width = width_in;
-            height = height_in;
+        ScreenshotResolution(int width, int height) {
+            this.width = width;
+            this.height = height;
         }
     }
-
-
 }

@@ -18,9 +18,8 @@ public abstract class WorldListWidgetMixin {
     LevelSummary summary;
 
     @Inject(method = "joinWorld", at = @At("HEAD"))
-    public void setFilename(CallbackInfo info) {
+    private void seamless_loading_screen$setFilename(CallbackInfo info) {
         ScreenshotLoader.setScreenshot(summary.getLevelId());
     }
 
 }
-

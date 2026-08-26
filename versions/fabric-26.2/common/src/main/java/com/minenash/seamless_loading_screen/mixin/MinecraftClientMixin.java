@@ -1,9 +1,7 @@
 package com.minenash.seamless_loading_screen.mixin;
 
 import com.minenash.seamless_loading_screen.OnLeaveHelper;
-import com.minenash.seamless_loading_screen.PlatformFunctions;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -19,41 +17,23 @@ public abstract class MinecraftClientMixin {
 
     @Unique
     private boolean seamless_loading_screen$firstOccurrence = true;
-    @Unique
-    private boolean seamless_loading_screen$bypassDisconnectCapture = false;
     @Shadow
     public abstract void stop();
-    @Shadow
-    public abstract void disconnectFromWorld(Component message);
-
-    @Inject(method = "disconnectFromWorld", at = @At("HEAD"), cancellable = true)
-    private void seamless_loading_screen$captureBeforeDisconnect(Component message, CallbackInfo info) {
-        if (!PlatformFunctions.hasFastQuit()) return;
-        if (seamless_loading_screen$bypassDisconnectCapture || instance.player == null) {
-            seamless_loading_screen$bypassDisconnectCapture = false;
-            return;
-        }
-
-        OnLeaveHelper.beginScreenshotTask(() -> {
-            seamless_loading_screen$bypassDisconnectCapture = true;
-            this.disconnectFromWorld(message);
-        });
-        info.cancel();
-    }
-
-    //----
 
     @Inject(method = "stop", at = @At("HEAD"), cancellable = true)
     private void onWindowClose(CallbackInfo info) {
-        if (!PlatformFunctions.hasFastQuit()) return;
-        if (!seamless_loading_screen$firstOccurrence || instance.player == null) return;
+        if (!seamless_loading_screen$firstOccurrence) return;
 
-        OnLeaveHelper.beginScreenshotTask(() -> {
+        Runnable stopClient = () -> {
             this.seamless_loading_screen$firstOccurrence = false;
-
             this.stop();
-        }, true);
+        };
 
-        info.cancel();
+        if (instance.player != null) {
+            OnLeaveHelper.beginScreenshotTask(stopClient, true);
+            info.cancel();
+        } else if (OnLeaveHelper.awaitPendingSaves(stopClient)) {
+            info.cancel();
+        }
     }
 }

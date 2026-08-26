@@ -19,7 +19,7 @@ public abstract class ConnectScreenMixin {
     @Inject(method = "connect", at = @At("HEAD"))
     private void getImage(Minecraft client, ServerAddress address, ServerData info,
                           @Nullable TransferState transferState, CallbackInfo ci) {
-        ScreenshotLoader.displayMode = ((ServerInfoExtension) info).getDisplayMode();
+        ScreenshotLoader.setDisplayMode(((ServerInfoExtension) info).getDisplayMode());
 
         ScreenshotLoader.setScreenshot(address.getHost(), address.getPort());
     }

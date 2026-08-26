@@ -2,6 +2,7 @@ package com.minenash.seamless_loading_screen;
 
 import com.minenash.seamless_loading_screen.config.SeamlessLoadingScreenConfig;
 import com.mojang.logging.LogUtils;
+import dev.isxander.yacl3.gui.YACLScreen;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 
@@ -30,6 +31,7 @@ public class SeamlessLoadingScreen {
     }
 
     public static void openSettingsScreen(Minecraft client) {
+        if (client.gui.screen() instanceof YACLScreen) return;
         client.gui.setScreen(SeamlessLoadingScreenConfig.getInstance().generateScreen(client.gui.screen()));
     }
 }

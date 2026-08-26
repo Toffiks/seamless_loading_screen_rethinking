@@ -1,9 +1,7 @@
 package com.minenash.seamless_loading_screen.mixin;
 
 import com.minenash.seamless_loading_screen.ScreenshotLoader;
-import com.minenash.seamless_loading_screen.WorldFadeScreen;
-import com.minenash.seamless_loading_screen.config.SeamlessLoadingScreenConfig;
-import net.minecraft.client.MinecraftClient;
+import com.minenash.seamless_loading_screen.WorldFadeTransition;
 import net.minecraft.client.option.GameOptions;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -19,12 +17,9 @@ public abstract class GameOptionsMixin {
             int minecraftMenuBlur = ((GameOptions) (Object) this)
                     .getMenuBackgroundBlurriness()
                     .getValue();
-            int loadingBlur = Math.max(minecraftMenuBlur,
-                    Math.round(SeamlessLoadingScreenConfig.get().screenshotBlurStrength));
-            float transition = MinecraftClient.getInstance().currentScreen instanceof WorldFadeScreen screen
-                    ? screen.getTransitionAlpha()
-                    : 1.0f;
-            cir.setReturnValue(Math.max(0, Math.round(loadingBlur * transition)));
+            float transition = WorldFadeTransition.isActive()
+                    ? WorldFadeTransition.getTransitionAlpha() : 1.0f;
+            cir.setReturnValue(Math.max(0, Math.round(minecraftMenuBlur * transition)));
         }
     }
 }

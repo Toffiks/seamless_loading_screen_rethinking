@@ -3,7 +3,7 @@
   "id": "seamless_loading_screen",
   "version": "${version}",
   "name": "Seamless Loading Screen Rethinking",
-  "description": "An unofficial fork of Seamless Loading Screen with updated loading transitions and background screenshot saving.",
+  "description": "Rethinking version of Seamless Loading Screen. Replaces world loading backgrounds with saved screenshots and smooth transitions.",
   "authors": [
     "Minenash",
     "Toffiks"
@@ -20,8 +20,7 @@
     ]
   },
   "mixins": [
-    "seamless_loading_screen-common.mixins.json",
-    "seamless_loading_screen-fabric.mixins.json"
+    "seamless_loading_screen-common.mixins.json"
   ],
   "custom": {
     "sodium:options": {
@@ -29,11 +28,11 @@
     }
   },
   "depends": {
-    "fabricloader": "*",
-    "fabric-api": "*",
+    "fabricloader": ">=0.19.3",
+    "fabric-api": ">=0.155.2+26.2",
     "java": ">=25",
     "minecraft": "26.2",
-    "yet_another_config_lib_v3": "*"
+    "yet_another_config_lib_v3": ">=3.9.6"
   },
   "conflicts": {
     "wynntils": "*"

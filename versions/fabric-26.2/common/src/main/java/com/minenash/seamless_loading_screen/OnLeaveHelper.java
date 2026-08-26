@@ -14,9 +14,14 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Coordinates capturing the final world frame before disconnecting.
@@ -24,21 +29,53 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class OnLeaveHelper {
 
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final Runnable NO_OP = () -> {};
-
-    public static volatile boolean attemptScreenShot = false;
-
-    private static final AtomicBoolean capturePending = new AtomicBoolean(false);
-    private static Runnable onceFinished = NO_OP;
-    private static boolean waitForSaveBeforeContinuation = false;
-    private static Path pendingWorldIcon;
+    private static final int CAPTURE_TIMEOUT_SECONDS = 5;
+    private static final int SAVE_TIMEOUT_SECONDS = 30;
+    private static final DateTimeFormatter ARCHIVE_TIMESTAMP =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss.SSS");
+    private static final AtomicReference<CaptureSession> PENDING_CAPTURE = new AtomicReference<>();
+    private static final Set<CompletableFuture<Void>> IN_FLIGHT_SAVES = ConcurrentHashMap.newKeySet();
 
     private record CaptureRequest(
             Path output,
             Path worldIcon,
-            SeamlessLoadingScreenConfig.ScreenshotResolution resolution,
             boolean archiveScreenshots
     ) {}
+
+    /** All mutable data for one capture, kept separate from later requests. */
+    private static final class CaptureSession {
+        private final AtomicReference<Runnable> continuation;
+        private final AtomicBoolean waitForSave;
+        private final CaptureRequest request;
+        private final AtomicBoolean captureStarted = new AtomicBoolean();
+        private final AtomicBoolean captureResolved = new AtomicBoolean();
+        private final AtomicBoolean captureComplete = new AtomicBoolean();
+        private final AtomicBoolean saveComplete = new AtomicBoolean();
+        private final AtomicBoolean forceContinuation = new AtomicBoolean();
+        private final AtomicBoolean saveTimeoutScheduled = new AtomicBoolean();
+        private final AtomicBoolean stateRestored = new AtomicBoolean();
+        private final AtomicBoolean continuationScheduled = new AtomicBoolean();
+        private CameraType previousCameraType;
+        private int previousFramebufferWidth;
+        private int previousFramebufferHeight;
+        private boolean captureResolutionApplied;
+
+        private CaptureSession(Runnable continuation, boolean waitForSave, CaptureRequest request) {
+            this.continuation = new AtomicReference<>(continuation);
+            this.waitForSave = new AtomicBoolean(waitForSave);
+            this.request = request;
+        }
+
+        private boolean canContinue() {
+            return forceContinuation.get()
+                    || captureComplete.get() && (!waitForSave.get() || saveComplete.get());
+        }
+    }
+
+    public static boolean shouldTakeScreenshot() {
+        CaptureSession session = PENDING_CAPTURE.get();
+        return session != null && !session.captureStarted.get();
+    }
 
     /**
      * Starts a capture and delays the supplied action until the image has been
@@ -56,127 +93,258 @@ public class OnLeaveHelper {
      * the JVM cannot terminate while the screenshot is still being encoded.
      */
     public static void beginScreenshotTask(Runnable runnable, boolean waitForSave) {
-        if (ScreenshotLoader.displayMode == DisplayMode.FREEZE) {
+        if (ScreenshotLoader.getDisplayMode() == DisplayMode.FREEZE) {
             runnable.run();
             return;
         }
 
-        if (!capturePending.compareAndSet(false, true)) {
+        CaptureRequest request = createCaptureRequest();
+        if (request == null) {
             runnable.run();
             return;
         }
 
-        onceFinished = runnable;
-        waitForSaveBeforeContinuation = waitForSave;
-        attemptScreenShot = true;
+        CaptureSession session = new CaptureSession(runnable, waitForSave, request);
+        while (true) {
+            CaptureSession pending = PENDING_CAPTURE.get();
+            if (pending != null) {
+                if (waitForSave) {
+                    pending.continuation.set(runnable);
+                    pending.waitForSave.set(true);
+                    scheduleSaveTimeout(pending);
+                    releaseContinuation(pending);
+                }
+                LOGGER.debug("[SeamlessLoadingScreen] Reused the pending screenshot capture for a repeated exit action");
+                return;
+            }
+            if (PENDING_CAPTURE.compareAndSet(null, session)) break;
+        }
 
         var client = Minecraft.getInstance();
-        client.options.setCameraType(CameraType.FIRST_PERSON);
-
-        pendingWorldIcon = null;
-        if (SeamlessLoadingScreenConfig.get().updateWorldIcon && client.isLocalServer()) {
-            var server = client.getSingleplayerServer();
-            if (server != null) pendingWorldIcon = server.getWorldScreenshotFile().orElse(null);
+        session.previousCameraType = client.options.getCameraType();
+        try {
+            applyCaptureResolution(client, SeamlessLoadingScreenConfig.get().resolution, session);
+        } catch (RuntimeException | OutOfMemoryError e) {
+            LOGGER.warn("[SeamlessLoadingScreen] Unable to use the configured capture resolution; falling back to Native", e);
+            restoreCaptureResolution(client, session);
         }
+
+        try {
+            client.options.setCameraType(CameraType.FIRST_PERSON);
+        } catch (RuntimeException e) {
+            LOGGER.warn("[SeamlessLoadingScreen] Unable to switch to first-person view for the screenshot", e);
+            session.previousCameraType = null;
+        }
+
+        // A minimized window or a renderer cancelled by another mod may never
+        // produce the requested frame. Never leave disconnect or shutdown stuck.
+        CompletableFuture.delayedExecutor(CAPTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .execute(() -> {
+                    if (!session.captureResolved.compareAndSet(false, true)) return;
+                    session.forceContinuation.set(true);
+                    releaseContinuation(session);
+                });
+    }
+
+    public static boolean awaitPendingSaves(Runnable continuation) {
+        CaptureSession pending = PENDING_CAPTURE.get();
+        if (pending != null) {
+            pending.continuation.set(continuation);
+            pending.waitForSave.set(true);
+            scheduleSaveTimeout(pending);
+            releaseContinuation(pending);
+            return true;
+        }
+
+        CompletableFuture<?>[] saves = IN_FLIGHT_SAVES.stream()
+                .filter(future -> !future.isDone())
+                .toArray(CompletableFuture[]::new);
+        if (saves.length == 0) return false;
+
+        AtomicBoolean resumed = new AtomicBoolean();
+        Runnable resumeOnce = () -> {
+            if (!resumed.compareAndSet(false, true)) return;
+            CompletableFuture.runAsync(() -> Minecraft.getInstance().execute(continuation));
+        };
+        CompletableFuture.allOf(saves).whenComplete((unused, error) -> resumeOnce.run());
+        CompletableFuture.delayedExecutor(SAVE_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(resumeOnce);
+        return true;
     }
 
     /**
      * Called after world rendering and before GUI rendering.
      */
     public static void takeScreenShot() {
-        if (!attemptScreenShot) return;
-
-        attemptScreenShot = false;
+        CaptureSession session = PENDING_CAPTURE.get();
+        if (session == null || !session.captureStarted.compareAndSet(false, true)) return;
         var client = Minecraft.getInstance();
 
         try {
             Screenshot.takeScreenshot(client.gameRenderer.mainRenderTarget(), image -> {
-                CaptureRequest request = createCaptureRequest();
-                boolean waitForSave = waitForSaveBeforeContinuation;
+                session.captureResolved.compareAndSet(false, true);
+                restoreClientState(client, session);
+                session.captureComplete.set(true);
+                scheduleSaveTimeout(session);
 
-                Util.ioPool().execute(() -> {
-                    saveScreenshot(image, request);
-                    if (waitForSave) releaseContinuation();
-                });
+                try {
+                    CompletableFuture<Void> save = CompletableFuture.runAsync(
+                            () -> saveScreenshot(image, session.request), Util.ioPool());
+                    IN_FLIGHT_SAVES.add(save);
+                    save.whenComplete((unused, error) -> {
+                        IN_FLIGHT_SAVES.remove(save);
+                        session.saveComplete.set(true);
+                        releaseContinuation(session);
+                    });
+                } catch (RuntimeException e) {
+                    image.close();
+                    session.saveComplete.set(true);
+                    LOGGER.error("[SeamlessLoadingScreen] Unable to schedule screenshot saving", e);
+                    releaseContinuation(session);
+                    return;
+                }
 
-                if (!waitForSave) releaseContinuation();
+                releaseContinuation(session);
             });
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | OutOfMemoryError e) {
+            session.captureResolved.compareAndSet(false, true);
+            restoreClientState(client, session);
+            session.forceContinuation.set(true);
             LOGGER.error("[SeamlessLoadingScreen] Unable to start screenshot capture", e);
-            releaseContinuation();
+            releaseContinuation(session);
         }
     }
 
     private static CaptureRequest createCaptureRequest() {
-        Path output = PlatformFunctions.getGameDir().resolve(ScreenshotLoader.getFileName()).normalize();
-        CaptureRequest request = new CaptureRequest(
-                output,
-                pendingWorldIcon,
-                SeamlessLoadingScreenConfig.get().resolution,
-                SeamlessLoadingScreenConfig.get().archiveScreenshots
-        );
-        pendingWorldIcon = null;
-        return request;
+        String relativeFileName = ScreenshotLoader.getFileName();
+        if (relativeFileName == null || relativeFileName.isBlank()) {
+            LOGGER.warn("[SeamlessLoadingScreen] No screenshot target is known for the current world");
+            return null;
+        }
+
+        Path gameDirectory = PlatformFunctions.getGameDir().toAbsolutePath().normalize();
+        Path output = gameDirectory.resolve(relativeFileName).normalize();
+        if (!output.startsWith(gameDirectory)) {
+            LOGGER.error("[SeamlessLoadingScreen] Refusing to write a screenshot outside the game directory: {}", output);
+            return null;
+        }
+
+        var client = Minecraft.getInstance();
+        Path worldIcon = null;
+        if (SeamlessLoadingScreenConfig.get().updateWorldIcon && client.isLocalServer()) {
+            var server = client.getSingleplayerServer();
+            if (server != null) worldIcon = server.getWorldScreenshotFile().orElse(null);
+        }
+
+        return new CaptureRequest(output, worldIcon,
+                SeamlessLoadingScreenConfig.get().archiveScreenshots);
     }
 
     private static void saveScreenshot(NativeImage capturedImage, CaptureRequest request) {
-        NativeImage image = capturedImage;
-
         try {
-            image = resizeForConfiguredResolution(capturedImage, request.resolution());
-
             Path output = request.output();
-            writeAtomically(image, output);
+            writeAtomically(capturedImage, output);
 
             if (request.archiveScreenshots()) {
                 String fileName = output.getFileName().toString();
                 int extension = fileName.lastIndexOf('.');
                 String baseName = extension > 0 ? fileName.substring(0, extension) : fileName;
-                String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH.mm.ss").format(new Date());
-                Path archive = PlatformFunctions.getGameDir()
-                        .resolve("screenshots/worlds/archive")
+                String timestamp = ARCHIVE_TIMESTAMP.format(LocalDateTime.now());
+                Path archive = output.getParent().getParent()
+                        .resolve("archive")
                         .resolve(baseName + "_" + timestamp + ".png");
-                writeAtomically(image, archive);
+                copyAtomically(output, archive);
             }
 
-            if (request.worldIcon() != null) updateIcon(request.worldIcon(), image);
-        } catch (Exception e) {
+            if (request.worldIcon() != null) updateIcon(request.worldIcon(), capturedImage);
+        } catch (Exception | OutOfMemoryError e) {
             LOGGER.error("[SeamlessLoadingScreen] Unable to save the world screenshot: {}",
                     request.output(), e);
         } finally {
-            image.close();
+            capturedImage.close();
         }
     }
 
-    private static NativeImage resizeForConfiguredResolution(
-            NativeImage source,
-            SeamlessLoadingScreenConfig.ScreenshotResolution resolution
+    private static void applyCaptureResolution(
+            Minecraft client,
+            SeamlessLoadingScreenConfig.ScreenshotResolution resolution,
+            CaptureSession session
     ) {
-        if (resolution == SeamlessLoadingScreenConfig.ScreenshotResolution.Native) return source;
+        session.captureResolutionApplied = false;
+        if (resolution == SeamlessLoadingScreenConfig.ScreenshotResolution.Native) return;
 
-        double scale = Math.min(
-                resolution.width / (double) source.getWidth(),
-                resolution.height / (double) source.getHeight());
-        int width = Math.max(1, (int) Math.round(source.getWidth() * scale));
-        int height = Math.max(1, (int) Math.round(source.getHeight() * scale));
+        var window = client.getWindow();
+        session.previousFramebufferWidth = window.getWidth();
+        session.previousFramebufferHeight = window.getHeight();
+        if (session.previousFramebufferWidth == resolution.width
+                && session.previousFramebufferHeight == resolution.height) return;
 
-        if (width == source.getWidth() && height == source.getHeight()) return source;
+        session.captureResolutionApplied = true;
+        window.setWidth(resolution.width);
+        window.setHeight(resolution.height);
+        client.gameRenderer.mainRenderTarget().resize(resolution.width, resolution.height);
+        client.resizeGui();
+    }
 
-        NativeImage resized = new NativeImage(width, height, false);
-        source.resizeSubRectTo(0, 0, source.getWidth(), source.getHeight(), resized);
-        source.close();
-        return resized;
+    private static void restoreCaptureResolution(Minecraft client, CaptureSession session) {
+        if (session.captureResolutionApplied) {
+            try {
+                var window = client.getWindow();
+                window.setWidth(session.previousFramebufferWidth);
+                window.setHeight(session.previousFramebufferHeight);
+                client.gameRenderer.mainRenderTarget().resize(session.previousFramebufferWidth, session.previousFramebufferHeight);
+                client.resizeGui();
+            } catch (RuntimeException | OutOfMemoryError e) {
+                LOGGER.error("[SeamlessLoadingScreen] Unable to restore the framebuffer size", e);
+            } finally {
+                session.captureResolutionApplied = false;
+            }
+        }
+    }
+
+    private static void restoreClientState(Minecraft client, CaptureSession session) {
+        if (!session.stateRestored.compareAndSet(false, true)) return;
+        restoreCaptureResolution(client, session);
+
+        if (session.previousCameraType != null) {
+            try {
+                client.options.setCameraType(session.previousCameraType);
+            } catch (RuntimeException e) {
+                LOGGER.error("[SeamlessLoadingScreen] Unable to restore the camera perspective", e);
+            } finally {
+                session.previousCameraType = null;
+            }
+        }
     }
 
     private static void writeAtomically(NativeImage image, Path output) throws IOException {
         Files.createDirectories(output.getParent());
-        Path temporary = output.resolveSibling(output.getFileName() + ".tmp.png");
+        Path temporary = Files.createTempFile(output.getParent(), ".sls-", ".tmp.png");
 
-        image.writeToFile(temporary);
         try {
-            Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            image.writeToFile(temporary);
+            moveAtomically(temporary, output);
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static void copyAtomically(Path source, Path output) throws IOException {
+        Files.createDirectories(output.getParent());
+        Path temporary = Files.createTempFile(output.getParent(), ".sls-", ".tmp.png");
+
+        try {
+            Files.copy(source, temporary, StandardCopyOption.REPLACE_EXISTING);
+            moveAtomically(temporary, output);
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static void moveAtomically(Path source, Path output) throws IOException {
+        try {
+            Files.move(source, output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException ignored) {
-            Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(source, output, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
@@ -196,26 +364,45 @@ public class OnLeaveHelper {
 
         try (NativeImage icon = new NativeImage(64, 64, false)) {
             image.resizeSubRectTo(x, y, width, height, icon);
-            icon.writeToFile(iconFile);
+            writeAtomically(icon, iconFile);
         }
     }
 
-    private static void releaseContinuation() {
-        Minecraft.getInstance().execute(() -> {
-            if (!capturePending.get()) return;
+    private static void releaseContinuation(CaptureSession session) {
+        if (!session.canContinue()) return;
+        if (!session.continuationScheduled.compareAndSet(false, true)) return;
 
-            pendingWorldIcon = null;
-            Runnable continuation = onceFinished;
-            onceFinished = NO_OP;
-            waitForSaveBeforeContinuation = false;
+        // Screenshot invokes its callback while RenderSystem is draining the
+        // GPU-fence queue. Disconnecting synchronously from that callback can
+        // re-enter the same queue and remove its current element twice.
+        CompletableFuture.runAsync(() -> {
+            var client = Minecraft.getInstance();
+            client.execute(() -> {
+                if (!session.canContinue()) {
+                    session.continuationScheduled.set(false);
+                    if (session.canContinue()) releaseContinuation(session);
+                    return;
+                }
+                if (!PENDING_CAPTURE.compareAndSet(session, null)) return;
+                restoreClientState(client, session);
 
-            try {
-                continuation.run();
-            } catch (RuntimeException e) {
-                LOGGER.error("[SeamlessLoadingScreen] Unable to continue after screenshot capture", e);
-            } finally {
-                capturePending.set(false);
-            }
+                try {
+                    session.continuation.get().run();
+                } catch (RuntimeException e) {
+                    LOGGER.error("[SeamlessLoadingScreen] Unable to continue after screenshot capture", e);
+                }
+            });
+        });
+    }
+
+    private static void scheduleSaveTimeout(CaptureSession session) {
+        if (!session.captureComplete.get() || !session.waitForSave.get()
+                || !session.saveTimeoutScheduled.compareAndSet(false, true)) return;
+
+        CompletableFuture.delayedExecutor(SAVE_TIMEOUT_SECONDS, TimeUnit.SECONDS).execute(() -> {
+            if (session.saveComplete.get()) return;
+            session.forceContinuation.set(true);
+            releaseContinuation(session);
         });
     }
 }

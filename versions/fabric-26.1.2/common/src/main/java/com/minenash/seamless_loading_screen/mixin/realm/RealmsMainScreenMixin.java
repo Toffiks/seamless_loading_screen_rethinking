@@ -14,7 +14,11 @@ public abstract class RealmsMainScreenMixin {
 
     @Inject(method = "play(Lcom/mojang/realmsclient/dto/RealmsServer;Lnet/minecraft/client/gui/screens/Screen;)V", at = @At("HEAD"))
     private static void getRealmNameID(RealmsServer realmsServer, Screen parent, CallbackInfo info) {
-        if (realmsServer != null) ScreenshotLoader.setRealmScreenshot(realmsServer.name);
+        if (realmsServer == null) return;
+        String name = realmsServer.name == null || realmsServer.name.isBlank()
+                ? "realm_" + realmsServer.id
+                : realmsServer.name;
+        ScreenshotLoader.setRealmScreenshot(realmsServer.id, name);
     }
 
 }

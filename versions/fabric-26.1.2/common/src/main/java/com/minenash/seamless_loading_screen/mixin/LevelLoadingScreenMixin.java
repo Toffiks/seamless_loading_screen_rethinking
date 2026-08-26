@@ -43,4 +43,3 @@ public abstract class LevelLoadingScreenMixin extends Screen {
         ci.cancel();
     }
 }
-

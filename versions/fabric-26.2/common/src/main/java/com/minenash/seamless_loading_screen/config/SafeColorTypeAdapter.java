@@ -1,32 +1,34 @@
 package com.minenash.seamless_loading_screen.config;
 
-import com.google.gson.*;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
 import com.mojang.logging.LogUtils;
-import dev.isxander.yacl3.config.GsonConfigInstance;
 import org.slf4j.Logger;
 
-import java.awt.*;
+import java.awt.Color;
 import java.lang.reflect.Type;
 import java.util.function.Supplier;
 
-public class SafeColorTypeAdapter extends GsonConfigInstance.ColorTypeAdapter {
+public class SafeColorTypeAdapter implements JsonSerializer<Color>, JsonDeserializer<Color> {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    public final Supplier<Color> supplier;
+    private final Supplier<Color> fallbackColor;
+    private boolean error;
 
-    public boolean errored = false;
-
-    public SafeColorTypeAdapter(Supplier<Color> supplier) {
-        this.supplier = supplier;
+    public SafeColorTypeAdapter(Supplier<Color> fallbackColor) {
+        this.fallbackColor = fallbackColor;
     }
 
     public boolean errored() {
-        boolean errored = this.errored;
-
-        this.errored = false;
-
-        return errored;
+        boolean result = error;
+        error = false;
+        return result;
     }
 
     @Override
@@ -34,26 +36,26 @@ public class SafeColorTypeAdapter extends GsonConfigInstance.ColorTypeAdapter {
         try {
             if (jsonElement instanceof JsonPrimitive primitive) {
                 if (primitive.isNumber()) {
-                    return super.deserialize(jsonElement, type, jsonDeserializationContext);
-                } else if (primitive.getAsString().contains("#")) {
-                    errored = true;
+                    return new Color(jsonElement.getAsInt(), true);
+                } else if (primitive.getAsString().startsWith("#")) {
+                    error = true;
 
-                    return new Color(Integer.parseInt(primitive.getAsString().replace("#", ""), 16), false);
+                    return new Color(Integer.parseInt(primitive.getAsString().substring(1), 16), false);
                 }
             }
-        } catch (UnsupportedOperationException | NumberFormatException e) {
+        } catch (RuntimeException e) {
             LOGGER.warn("Exception thrown during Color Deserialization", e);
         }
 
-        errored = true;
+        error = true;
 
-        LOGGER.warn("Unable to parse a given color form the config file, such will be set to default! [Value: {}]", jsonElement);
+        LOGGER.warn("Unable to parse the color from the config file; using the default value instead. [Value: {}]", jsonElement);
 
-        return supplier.get();
+        return fallbackColor.get();
     }
 
     @Override
-    public JsonElement serialize(Color color, Type type, JsonSerializationContext jsonSerializationContext) {
-        return super.serialize(color, type, jsonSerializationContext);
+    public JsonElement serialize(Color color, Type type, JsonSerializationContext context) {
+        return new JsonPrimitive(color.getRGB());
     }
 }

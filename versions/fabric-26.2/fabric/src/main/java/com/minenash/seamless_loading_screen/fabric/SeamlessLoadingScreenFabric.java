@@ -1,6 +1,8 @@
 package com.minenash.seamless_loading_screen.fabric;
 
 import com.minenash.seamless_loading_screen.SeamlessLoadingScreen;
+import com.minenash.seamless_loading_screen.ScreenshotLoader;
+import com.minenash.seamless_loading_screen.WorldFadeTransition;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -18,6 +20,8 @@ public class SeamlessLoadingScreenFabric implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            WorldFadeTransition.clientTick();
+            ScreenshotLoader.clientTick();
             while (OPEN_SETTINGS.consumeClick()) SeamlessLoadingScreen.openSettingsScreen(client);
         });
         SeamlessLoadingScreen.onInitializeClient();

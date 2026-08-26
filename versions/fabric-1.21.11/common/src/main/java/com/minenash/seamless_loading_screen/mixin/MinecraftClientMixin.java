@@ -1,11 +1,11 @@
 package com.minenash.seamless_loading_screen.mixin;
 
 import com.minenash.seamless_loading_screen.OnLeaveHelper;
-import com.minenash.seamless_loading_screen.PlatformFunctions;
 import com.minenash.seamless_loading_screen.ScreenshotLoader;
-import com.minenash.seamless_loading_screen.WorldFadeScreen;
+import com.minenash.seamless_loading_screen.WorldFadeTransition;
 import com.minenash.seamless_loading_screen.config.SeamlessLoadingScreenConfig;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.DisconnectedScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.world.LevelLoadingScreen;
 import org.jetbrains.annotations.Nullable;
@@ -33,31 +33,43 @@ public abstract class MinecraftClientMixin {
 
     @ModifyVariable(method = "setScreen", at = @At("HEAD"), argsOnly = true, index = 1)
     private Screen addWorldTransition(Screen nextScreen) {
+        if (nextScreen instanceof DisconnectedScreen && ScreenshotLoader.isLoadingScreenPending()) {
+            WorldFadeTransition.finish();
+            return nextScreen;
+        }
+
+        if (WorldFadeTransition.isActive() && nextScreen != null) {
+            WorldFadeTransition.finish();
+            return nextScreen;
+        }
+
         if (!(currentScreen instanceof LevelLoadingScreen) || !ScreenshotLoader.isTransitionActive()) {
             return nextScreen;
         }
 
         if (nextScreen != null) {
-            ScreenshotLoader.finishLoadingScreen();
+            WorldFadeTransition.finish();
             return nextScreen;
         }
 
-        return new WorldFadeScreen(Math.max(1, SeamlessLoadingScreenConfig.get().fade));
+        WorldFadeTransition.start(Math.max(1, SeamlessLoadingScreenConfig.get().fade));
+        return null;
     }
-
-    //----
 
     @Inject(method = "scheduleStop", at = @At("HEAD"), cancellable = true)
     private void onWindowClose(CallbackInfo info) {
-        if (!PlatformFunctions.hasFastQuit()) return;
-        if (!seamless_loading_screen$firstOccurrence || instance.player == null) return;
+        if (!seamless_loading_screen$firstOccurrence) return;
 
-        OnLeaveHelper.beginScreenshotTask(() -> {
+        Runnable stopClient = () -> {
             this.seamless_loading_screen$firstOccurrence = false;
-
             this.scheduleStop();
-        }, true);
+        };
 
-        info.cancel();
+        if (instance.player != null) {
+            OnLeaveHelper.beginScreenshotTask(stopClient, true);
+            info.cancel();
+        } else if (OnLeaveHelper.awaitPendingSaves(stopClient)) {
+            info.cancel();
+        }
     }
 }

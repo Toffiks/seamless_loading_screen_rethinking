@@ -4,7 +4,10 @@ public enum DisplayMode {
     ENABLED, FREEZE, DISABLED;
 
     public DisplayMode next() {
-        return DisplayMode.values()[(ordinal() + 1) % 3];
+        return switch (this) {
+            case ENABLED -> FREEZE;
+            case FREEZE -> DISABLED;
+            case DISABLED -> ENABLED;
+        };
     }
-
 }

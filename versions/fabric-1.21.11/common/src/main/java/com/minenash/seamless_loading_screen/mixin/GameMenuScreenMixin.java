@@ -1,7 +1,6 @@
 package com.minenash.seamless_loading_screen.mixin;
 
 import com.minenash.seamless_loading_screen.OnLeaveHelper;
-import com.minenash.seamless_loading_screen.PlatformFunctions;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,7 +15,6 @@ public abstract class GameMenuScreenMixin {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/widget/ButtonWidget;builder(Lnet/minecraft/text/Text;Lnet/minecraft/client/gui/widget/ButtonWidget$PressAction;)Lnet/minecraft/client/gui/widget/ButtonWidget$Builder;", ordinal = 0),
             index = 1)
     private ButtonWidget.PressAction adjust(ButtonWidget.PressAction onPress) {
-        if (!PlatformFunctions.hasFastQuit()) return onPress;
         return button -> OnLeaveHelper.beginScreenshotTask(() -> onPress.onPress(button));
     }
 

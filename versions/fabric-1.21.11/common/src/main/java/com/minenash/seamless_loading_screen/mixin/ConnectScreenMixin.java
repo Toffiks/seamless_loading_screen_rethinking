@@ -16,8 +16,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ConnectScreenMixin {
 
     @Inject(method = "connect(Lnet/minecraft/client/MinecraftClient;Lnet/minecraft/client/network/ServerAddress;Lnet/minecraft/client/network/ServerInfo;Lnet/minecraft/client/network/CookieStorage;)V", at = @At("HEAD"))
-    public void getImage(MinecraftClient client, ServerAddress address, ServerInfo info, CookieStorage cookieStorage, CallbackInfo ci) {
-        ScreenshotLoader.displayMode = ((ServerInfoExtension) info).getDisplayMode();
+    private void seamless_loading_screen$setServerScreenshot(MinecraftClient client, ServerAddress address,
+                                                               ServerInfo info, CookieStorage cookieStorage,
+                                                               CallbackInfo ci) {
+        ScreenshotLoader.setDisplayMode(((ServerInfoExtension) info).getDisplayMode());
 
         ScreenshotLoader.setScreenshot(address.getAddress(), address.getPort());
     }

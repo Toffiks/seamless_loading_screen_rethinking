@@ -13,7 +13,7 @@ public abstract class GameRendererMixin {
 
     @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/fog/FogRenderer;rotate()V"))
     private void attemptToTakeScreenshot(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
-        if (OnLeaveHelper.attemptScreenShot) OnLeaveHelper.takeScreenShot();
+        if (OnLeaveHelper.shouldTakeScreenshot()) OnLeaveHelper.takeScreenShot();
     }
 
 }

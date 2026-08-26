@@ -15,6 +15,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.Locale;
+
 @Mixin(ManageServerScreen.class)
 public abstract class ManageServerScreenMixin extends Screen {
     @Shadow @Final private ServerData serverData;
@@ -45,7 +47,6 @@ public abstract class ManageServerScreenMixin extends Screen {
         return Component.translatable("seamless_loading_screen.server.displayMode")
                 .append(": ")
                 .append(Component.translatable("seamless_loading_screen.config.displayMode."
-                        + ((ServerInfoExtension) serverData).getDisplayMode().name().toLowerCase()));
+                        + ((ServerInfoExtension) serverData).getDisplayMode().name().toLowerCase(Locale.ROOT)));
     }
 }
-
