@@ -1,0 +1,60 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: fabric/1.21.11
+            java: '21'
+            artifact: seamless-loading-screen-fabric-1.21.11
+          - project: fabric/26.1.2
+            java: '25'
+            artifact: seamless-loading-screen-fabric-26.1.2
+          - project: fabric/26.2
+            java: '25'
+            artifact: seamless-loading-screen-fabric-26.2
+          - project: forge/1.20.1
+            java: '17'
+            artifact: seamless-loading-screen-forge-1.20.1
+          - project: neoforge/1.21.1
+            java: '21'
+            artifact: seamless-loading-screen-neoforge-1.21.1
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and run tests
+        working-directory: ${{ matrix.project }}
+        run: |
+          chmod +x gradlew
+          ./gradlew clean check build --no-daemon
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.project }}/build/libs/*.jar
+            !${{ matrix.project }}/build/libs/*-sources.jar
+          if-no-files-found: error

@@ -1,0 +1,37 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="seamless_loading_screen"
+version="1.0.2+1.21.1-neoforge"
+displayName="Seamless Loading Screen Rethinking"
+logoFile="icon.png"
+authors="Minenash, Toffiks"
+description='''
+Replaces Minecraft's world loading background with the last frame captured when leaving that world.
+'''
+
+[[mixins]]
+config="seamless_loading_screen-common.mixins.json"
+
+[[dependencies.seamless_loading_screen]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.seamless_loading_screen]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.seamless_loading_screen]]
+modId="yet_another_config_lib_v3"
+type="required"
+versionRange="[3.8.1,)"
+ordering="AFTER"
+side="CLIENT"

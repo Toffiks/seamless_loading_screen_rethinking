@@ -1,0 +1,37 @@
+plugins {
+    id 'base'
+}
+
+def builds = [
+    fabric12111 : 'fabric/1.21.11',
+    fabric2612  : 'fabric/26.1.2',
+    fabric262   : 'fabric/26.2',
+    forge1201   : 'forge/1.20.1',
+    neoforge1211: 'neoforge/1.21.1'
+]
+
+def isWindows = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')
+
+builds.each { name, projectPath ->
+    tasks.register("build${name.capitalize()}", Exec) {
+        group = 'build'
+        description = "Builds ${projectPath}."
+        workingDir = file(projectPath)
+
+        if (isWindows) {
+            commandLine 'cmd', '/c', 'gradlew.bat', 'clean', 'check', 'build', '--no-daemon'
+        } else {
+            commandLine './gradlew', 'clean', 'check', 'build', '--no-daemon'
+        }
+    }
+}
+
+tasks.register('buildAll') {
+    group = 'build'
+    description = 'Builds every supported Minecraft and mod-loader target.'
+    dependsOn builds.keySet().collect { "build${it.capitalize()}" }
+}
+
+tasks.named('build') {
+    dependsOn 'buildAll'
+}

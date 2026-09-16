@@ -1,0 +1,69 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.142'
+}
+
+version = project.mod_version
+group = project.mod_group_id
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.isxander.dev/releases' }
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    runs {
+        client {
+            client()
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    implementation "dev.isxander:yet-another-config-lib:${project.yacl_version}"
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-processing', '-Xlint:-classfile']
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
+
+java {
+    withSourcesJar()
+}
+
+tasks.withType(Jar).configureEach {
+    includeEmptyDirs = false
+}

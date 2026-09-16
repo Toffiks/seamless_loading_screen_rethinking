@@ -1,0 +1,68 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+def modVersion = project.mod_version
+version = modVersion
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+sourceSets {
+    main {
+        java.srcDirs = ['common/src/main/java', 'fabric/src/main/java']
+        resources.srcDirs = ['common/src/main/resources', 'fabric/src/main/resources']
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.fabricmc.net/' }
+    maven { url = 'https://api.modrinth.com/maven' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    implementation "maven.modrinth:1eAoo2KR:${project.yacl_version}"
+    compileOnly "maven.modrinth:mOgUt4GM:${project.modmenu_version}"
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+    inputs.property 'version', modVersion
+    from('LICENSE')
+    filesMatching('fabric.mod.json') {
+        expand 'version': modVersion
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 25
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-processing', '-Xlint:-classfile']
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+tasks.withType(Jar).configureEach {
+    includeEmptyDirs = false
+}
+
+tasks.named('sourcesJar', Jar) {
+    from('LICENSE')
+}
