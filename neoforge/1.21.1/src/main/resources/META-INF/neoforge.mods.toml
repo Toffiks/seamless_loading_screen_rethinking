@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="seamless_loading_screen"
-version="1.0.2+1.21.1-neoforge"
+version="1.0.2.1+1.21.1-neoforge"
 displayName="Seamless Loading Screen Rethinking"
 logoFile="icon.png"
 authors="Minenash, Toffiks"
