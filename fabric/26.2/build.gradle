@@ -12,9 +12,10 @@ base {
 
 sourceSets {
     main {
-        java.srcDirs = ['common/src/main/java', 'fabric/src/main/java']
+        java.srcDirs = ['common/src/main/java', 'fabric/src/main/java', '../../shared/src/main/java']
         resources.srcDirs = ['common/src/main/resources', 'fabric/src/main/resources']
     }
+    test.java.srcDir '../../shared/src/test/java'
 }
 
 repositories {

@@ -10,6 +10,11 @@ base {
     archivesName = project.archives_base_name
 }
 
+sourceSets {
+    main.java.srcDir '../../shared/src/main/java'
+    test.java.srcDir '../../shared/src/test/java'
+}
+
 repositories {
     mavenCentral()
     maven { url = 'https://maven.isxander.dev/releases' }

@@ -21,6 +21,11 @@ base {
     archivesName = project.archives_base_name
 }
 
+sourceSets {
+    main.java.srcDir '../../shared/src/main/java'
+    test.java.srcDir '../../shared/src/test/java'
+}
+
 minecraft {
     mappings channel: 'official', version: project.minecraft_version
     copyIdeResources = true
