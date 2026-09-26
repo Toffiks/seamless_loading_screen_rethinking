@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "seamless_loading_screen",
+  "id": "seamless_loading_screen_rethinking",
   "version": "${version}",
   "name": "Seamless Loading Screen Rethinking",
   "description": "Rethinking version of Seamless Loading Screen. Replaces world loading backgrounds with saved screenshots and smooth transitions.",

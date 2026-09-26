@@ -1,6 +1,7 @@
 package com.minenash.seamless_loading_screen.config;
 
 import com.minenash.seamless_loading_screen.DisplayMode;
+import com.minenash.seamless_loading_screen.SeamlessLoadingScreen;
 import net.fabricmc.loader.api.FabricLoader;
 import dev.isxander.yacl3.api.ConfigCategory;
 import dev.isxander.yacl3.api.ListOption;
@@ -34,7 +35,7 @@ public class SeamlessLoadingScreenConfig {
     private static final SafeColorTypeAdapter COLOR_ADAPTER = new SafeColorTypeAdapter(() -> getDefaults().tintColor);
     private static final ConfigClassHandler<SeamlessLoadingScreenConfig> CONFIG_CLASS_HANDLER = ConfigClassHandler
             .createBuilder(SeamlessLoadingScreenConfig.class)
-            .id(Identifier.fromNamespaceAndPath("seamless_loading_screen", "config"))
+            .id(Identifier.fromNamespaceAndPath(SeamlessLoadingScreen.MODID, "config"))
             .serializer(config -> GsonConfigSerializerBuilder.create(config)
                     .appendGsonBuilder(builder -> builder.setPrettyPrinting()
                             .disableHtmlEscaping()

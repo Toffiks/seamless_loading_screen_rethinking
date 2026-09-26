@@ -13,7 +13,7 @@ import java.nio.file.Path;
 
 public class SeamlessLoadingScreen {
 
-    public static final String MODID = "seamless_loading_screen";
+    public static final String MODID = "seamless_loading_screen_rethinking";
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
