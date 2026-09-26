@@ -24,12 +24,21 @@ jobs:
           - project: fabric/26.2
             java: '25'
             artifact: seamless-loading-screen-fabric-26.2
+          - project: fabric/26.3
+            java: '25'
+            artifact: seamless-loading-screen-fabric-26.3
           - project: forge/1.20.1
             java: '17'
             artifact: seamless-loading-screen-forge-1.20.1
           - project: neoforge/1.21.1
             java: '21'
             artifact: seamless-loading-screen-neoforge-1.21.1
+          - project: neoforge/26.1.2
+            java: '25'
+            artifact: seamless-loading-screen-neoforge-26.1.2
+          - project: neoforge/26.3
+            java: '25'
+            artifact: seamless-loading-screen-neoforge-26.3
 
     steps:
       - name: Check out repository

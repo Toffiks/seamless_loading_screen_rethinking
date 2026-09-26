@@ -1,0 +1,8 @@
+{
+  "seamless_loading_screen.keybind.config": "打开无缝加载屏幕设置",
+  "seamless_loading_screen.server.displayMode": "无缝加载屏幕",
+  "seamless_loading_screen.config.screenshotRevealMode": "截图显示方式",
+  "seamless_loading_screen.config.screenshotRevealMode.description": "New 会随加载进度平滑显示截图；Classic 会在加载界面打开时立即完整显示截图。",
+  "seamless_loading_screen.config.screenshotRevealMode.new": "New",
+  "seamless_loading_screen.config.screenshotRevealMode.classic": "Classic"
+}
